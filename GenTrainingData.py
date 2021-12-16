@@ -1,10 +1,10 @@
-from Preprocessing import process_dataframe
+from Preprocessing import Preprocessing
 import pandas as pd
 
-SPY_raw_data = pd.read_csv("SPY_OHLC.csv")
+SPY_raw_data = pd.read_csv("Preprocessing/SPY_OHLC.csv")
 SPY_raw_data = SPY_raw_data[["Close"]]
 
-process_dataframe(SPY_raw_data) #Acts on a ref to modify in place
+Preprocessing.process_dataframe(SPY_raw_data) #Acts on a ref to modify in place
 #may be slower than acting on a copy, TODO: compare
 
 SPY_processed = SPY_raw_data[200:] #SMA200 is invalid before the 200th period
@@ -44,3 +44,4 @@ training_set[["SMA200"]] = training_set[["SMA200"]].div(training_set[["Close"]].
 
 training_set.drop("Close", axis=1, inplace=True)
 training_set.to_csv("Processed_Data.csv")
+    
