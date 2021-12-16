@@ -18,7 +18,7 @@ def raw_RSI_data(df, index):
 
 def raw_RSI(df, index):
     """
-    Calculates the non smoothed RSI for a given index, using RSI_PERIODS periods
+    Calculates the RSI for a given index, using RSI_PERIODS periods
     https://school.stockcharts.com/doku.php?id=technical_indicators:relative_strength_index_rsi
     """
     deltas = raw_RSI_data(df, index)
@@ -30,9 +30,6 @@ def raw_RSI(df, index):
     return 100 - 100 / (1 + RS)
 
 def RSI(df, index):
-    """
-    Calculates smoothed RSI for given index, with RSI_PERIODS periods
-    """
     if index <= RSI_PERIODS:
         raise Exception("RSI insufficient past data")
     elif index == RSI_PERIODS+1:
