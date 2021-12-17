@@ -8,7 +8,7 @@ BB_PERIODS = 20
 def raw_RSI_data(df, index):
     data = df[index-RSI_PERIODS-1:index+1]
 
-    deltas = data.pct_change().multiply(100).rename(columns={"Close" : "Chg%"})[1:].reset_index(drop=True)
+    deltas = data[["Close"]].pct_change().multiply(100).rename(columns={"Close" : "Chg%"})[1:].reset_index(drop=True)
 
     mask = deltas["Chg%"] < 0
     deltas["Gain"] = deltas["Chg%"].mask(mask)
@@ -37,7 +37,7 @@ def RSI(df, index):
     
     deltas = raw_RSI_data(df, index)
     
-    current_delta = df.iloc[index-1:index+1].pct_change()[1:].reset_index(drop=True).iloc[0,0].item()
+    current_delta = df[["Close"]].iloc[index-1:index+1].pct_change()[1:].reset_index(drop=True).iloc[0,0].item()
     curr_gain = max(0, current_delta)
     curr_loss = abs(min(0, current_delta))
 
@@ -66,7 +66,7 @@ def calc_bollinger_bands(df, index):
 
     mean = raw_SMA(data)
     for row in data.index:
-        dev = data.iloc[row-1, 0] - mean
+        dev = data[["Close"]].iloc[row-1, 0] - mean
         data.at[row, "Deviation"] = dev
         data.at[row, "DeviationSq"] = dev*dev
         
