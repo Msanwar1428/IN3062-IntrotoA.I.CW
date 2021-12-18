@@ -20,15 +20,14 @@ for row in training_set.index:
     cost = training_set.at[row, "Close"]
     best = cost.copy()
     worst = cost.copy()
-    for x in range(30):
-        try:
-            price = SPY_processed.at[row+x, "Close"]
-            if price > best:
-                best = price.copy()
-            elif price < worst:
-                worst = price.copy()
-        except:
-            pass
+
+    for x in range( min(15, len(training_set.index)+200-row) ):
+
+        price = SPY_processed.at[row+x, "Close"]
+        if price > best:
+            best = price.copy()
+        elif price < worst:
+            worst = price.copy()
 
     d_best = best - cost
     d_worst = cost - worst #-1 * (worst-cost) 
@@ -41,6 +40,7 @@ training_set[["BB_Upper"]] = training_set[["BB_Upper"]].div(training_set[["Close
 training_set[["SMA50"]] = training_set[["SMA50"]].div(training_set[["Close"]].values)
 training_set[["SMA100"]] = training_set[["SMA100"]].div(training_set[["Close"]].values)
 training_set[["SMA200"]] = training_set[["SMA200"]].div(training_set[["Close"]].values)
+training_set[["RSI"]] = training_set[["RSI"]].div(100)
 
 #training_set.drop("Close", axis=1, inplace=True)
 training_set.to_csv("Processed_Data.csv")
