@@ -1,8 +1,12 @@
 """
 Load the training data, divide into 70/30 distribution
-Quick & Simple test of the model 
+Quick & Simple test of the model
+Model tuned by CVGridSearch to tune hyperparameters.
 
-TODO: 50/25/25 distribution for train/test/holdout sets
+TODO:
+evaluate 50/25/25 distribution for train/test/holdout sets
+iterate gridsearch at increasing fidelity levels
+
 
 @author: Lucas Wilson
 """
@@ -13,7 +17,8 @@ import numpy as np
 from sklearn.svm import SVC
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import confusion_matrix
-from sklearn.model_selection import train_test_split 
+from sklearn.model_selection import train_test_split
+from sklearn.model_selection import GridSearchCV
 
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
@@ -47,9 +52,10 @@ except FileNotFoundError:
 
 result = []
 for x in price_data.columns:
-    if x != "Target" and x != "Date": 
+    if x != "Target" and x != "Date" and x != "Close" and x != "Unnamed: 0": 
         result.append(x)
-        #clip useless columns from the data set 
+        #clip useless columns from the data set
+print(result)
 
 X = price_data[result].values
 y = price_data["Target"].values
@@ -61,22 +67,45 @@ X_train, X_test, y_train, y_test = train_test_split(
     random_state=51
 )
 
-model = SVC(
-    gamma=.01,
-    decision_function_shape="ovo", #binary classification
-    kernel = "rbf", #expecting necessity to cast to higher dim space to solve
-    C = 1, #A fairly low value of C that should avoid overfitting
-    class_weight = "balanced" #attempt to solve for 64.6% buy target imbalance
-)
-model.fit(X_train, y_train)
+params = {
+    "C" : [0.1, 1, 10, 100, 250, 500],
+    "gamma" : [100, 75, 50, 25, 10, 1, .1, .01, .001],
+}
 
-y_pred = model.predict(X_test)
+grid = GridSearchCV(
+    SVC(
+        decision_function_shape="ovo", #binary classification
+        kernel = "rbf", #expecting necessity to cast to higher dim space to solve
+        class_weight = "balanced", #attempt to solve for 64.6% buy target imbalance,
+        probability = True
+    ),
+    params,
+    refit = True,
+    verbose = 2
+)
+model = SVC(
+    decision_function_shape="ovo",
+    kernel = "rbf",
+    class_weight = "balanced",
+    gamma = 150,
+    C = 500,
+    probability = True
+)
+grid.fit(X_train, y_train)
+print(grid.best_estimator_)
+
+y_pred = grid.predict(X_test)
+#print(y_pred)
 
 output = pd.DataFrame(data=np.c_[y_test, y_pred])
 
 cm = confusion_matrix(y_test, y_pred)
 cm_normalized = cm.astype("float") / cm.sum(axis=1)[:, np.newaxis]
 
+TP = 0
+FP = 0
+TN = 0
+FN = 0
 
 #draw price series and prediction lines
 price_data["Date"] = pd.to_datetime(price_data["Date"], format="%Y-%m-%d")
@@ -84,31 +113,73 @@ price_data.set_index("Date", drop=False, inplace=True)
 #price_data.drop("Date", inplace=True)
 print(price_data)
 
+fig, (ax, ax2) = plt.subplots(2)
 
-ax = price_data[["Close"]].plot(x_compat=True)
-ax.xaxis.set_major_locator(mdates.MonthLocator())
+profits = 1.0 #0% profits
+mode = ""
+last_mode_price = 0
 
-TP = 0
-FP = 0
+def swap_mode(new_mode, price):
+    global mode, profits, last_mode_price
+    if new_mode == "BUY" and mode == "SELL":
+        profits *= last_mode_price/price
+    elif new_mode == "SELL" and mode == "BUY":
+        profits *= price/last_mode_price
+
+    mode = new_mode
+    last_mode_price = price
 
 for idx, row in price_data.iterrows():
     #print(price_data[row:row+1])
-    pred = model.predict([row[result]])
-    if pred != row.loc["Target"]:
+    pred = grid.predict_proba([row[result]])[0]
+    #if pred != row.loc["Target"]:
         #print("wrong")
-        if pred > .99:
-            ax.axvline(x=row["Date"], color=(0,1,0))
-            FP+=1
+        #if pred > .99:
+            #ax.axvline(x=row["Date"], color=(0,1,0))
+            #FP+=1
+        #else:
+            #ax.axvline(x=row["Date"], color=(1,0,0))
+            #pass
+        
+    #else:
+    if pred[1] > .5:
+        if row.Target > .99:
+            TP += 1
         else:
+            FP += 1
+        if mode != "BUY":
+            ax.axvline(x=row["Date"], color=(0,1,0))
+            swap_mode("BUY", row["Close"])
+    elif pred[0] > .5:
+        if row.Target < .01:
+            TN += 1
+        else:
+            FN += 1
+        if mode != "SELL":
             ax.axvline(x=row["Date"], color=(1,0,0))
-        pass
-    else:
-        if pred > .99:
-            TP+=1
+            swap_mode("SELL", row["Close"])
         #print("right")
-        pass
+
 
 print(TP / (TP + FP))
+print("PROFIT MULTIPLE: " + str(profits))
+
+price_data[["BB_SMA"]] = price_data["BB_SMA"] * price_data["Close"]
+price_data[["BB_Upper"]] = price_data["BB_Upper"] * price_data["Close"]
+price_data[["BB_Lower"]] = price_data["BB_Lower"] * price_data["Close"]
+price_data[["SMA50"]] = price_data["SMA50"] * price_data["Close"]
+price_data[["SMA100"]] = price_data["SMA100"] * price_data["Close"]
+price_data[["SMA200"]] = price_data["SMA200"] * price_data["Close"]
+
+price_data[["Close"]].plot(ax=ax, x_compat=True)
+price_data[["BB_Upper", "BB_Lower"]].plot(ax=ax, color=(1,0,0))
+price_data[["BB_SMA"]].plot(ax=ax, color=(1, .3, 0))
+price_data[["SMA50"]].plot(ax=ax)
+price_data[["SMA100"]].plot(ax=ax)
+price_data[["SMA200"]].plot(ax=ax)
+
+price_data[["RSI"]].plot(ax=ax2)
+ax.xaxis.set_major_locator(mdates.MonthLocator())
 
 plt.figure(2)
 plot_confusion_matrix(cm_normalized, ["Sell", "Buy"], title = "Normalized Confusion")
