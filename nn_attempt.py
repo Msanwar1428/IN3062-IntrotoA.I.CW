@@ -36,8 +36,10 @@ from sklearn.utils import class_weight
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 
+np.random.seed(0)
+
 #Load price data and extract into data set and classifications 
-price_data = pd.read_csv("Processed_Data.csv")[200:]
+price_data = pd.read_csv("Processed_Data.csv")[1:] #First data point has incorrect SMA 
 features = ["RSI", "BB_Upper", "BB_SMA", "BB_Lower", "SMA50", "SMA100", "SMA200"]
 classes = ["Sell", "Buy"]
 X = price_data[features].values
@@ -45,6 +47,7 @@ y = price_data["Target"].values
 
 scaler = StandardScaler().fit(X)
 X = scaler.transform(X)
+np.random.shuffle(X)
 
 X_train, X_test, y_train, y_test = train_test_split(
     X,
@@ -61,41 +64,28 @@ class_weights = class_weight.compute_class_weight(
 class_weights = dict(zip(np.unique([0, 1]), class_weights))
 
 model = Sequential()
-model.add(
-    Dense(
-        7,
-        activation="relu",
-        input_shape=(7,)
-    )
-)
-model.add(Dense(7, activation="tanh"))
-model.add(Dense(7, activation="tanh"))
-model.add(Dense(7, activation="tanh"))
-model.add(Dense(7, activation="tanh"))
-model.add(Dense(7, activation="tanh"))
-model.add(Dense(7, activation="tanh"))
-model.add(Dense(7, activation="tanh"))
+model.add(Dense(3, activation="tanh", input_shape=(7,) ))
+model.add(Dense(3, activation="tanh", ))
 model.add(Dense(1, activation="sigmoid"))
+
 model.compile(
     loss="binary_crossentropy",
     optimizer=keras.optimizers.SGD(
-        learning_rate = .01,
-        momentum = .001,
-        name="SGD"
+        learning_rate=.0002,
+        momentum=.00002
     ),
     metrics=["accuracy"]
 )
+
 history = model.fit(
     X_train,
     y_train,
     validation_data = (X_test, y_test),
     class_weight = class_weights,
-    epochs=350,
+    epochs=250,
     verbose=0,
-    batch_size=1
+    batch_size=3
 )
-
-TAIL_CONST = 0.3
 
 price_data.set_index("Date", inplace=True, drop=False)
 #price_data.drop("Date", inplace=True)
@@ -107,16 +97,17 @@ ax.xaxis.set_major_locator(mdates.MonthLocator(interval=1))
 for i, row in price_data.iterrows():
     t = np.array([row[features]]).astype(np.float32)
     shit = model(t).numpy()[0][0]
-    if shit < .4:
+    if shit < .5:
         print("SELL")
         plt.axvline(x=row["Date"], color=(1,0,0,.3))
-    elif shit > .55:
+    elif shit > .5:
         print("BUY")
         plt.axvline(x=row["Date"], color=(0,1,0, .3))
 
 fig, (ax1, ax2) = plt.subplots(2)
 fig.suptitle("Training data", fontsize=16)
 ax1.plot(history.history["loss"])
+ax1.plot(history.history["val_loss"])
 ax2.plot(history.history["accuracy"])
 ax2.plot(history.history["val_accuracy"])
 plt.xlabel("epoch")
