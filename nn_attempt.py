@@ -12,12 +12,12 @@ The page makes me believe the best I may get from the NN is some "good enough" t
 
 I will just copy everyone else and use ReLu for this many parameters, I think.
 
-@author: Lucas Wilson
+@Author: Lucas Wilson
 """
 
 from keras.models import Sequential
 from keras.layers import Dense
-from keras.layers import InputSpec
+from keras.layers import Dropout
 
 from tensorflow import keras
 from tensorflow.python.client import device_lib
@@ -27,6 +27,7 @@ import numpy as np
 
 from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import normalize
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import confusion_matrix
 from sklearn.model_selection import train_test_split
@@ -47,6 +48,7 @@ y = price_data["Target"].values
 
 scaler = StandardScaler().fit(X)
 X = scaler.transform(X)
+#X = normalize(X)
 np.random.shuffle(X)
 
 X_train, X_test, y_train, y_test = train_test_split(
@@ -64,15 +66,15 @@ class_weights = class_weight.compute_class_weight(
 class_weights = dict(zip(np.unique([0, 1]), class_weights))
 
 model = Sequential()
-model.add(Dense(3, activation="tanh", input_shape=(7,) ))
+model.add(Dense(3, activation="tanh", ))
 model.add(Dense(3, activation="tanh", ))
 model.add(Dense(1, activation="sigmoid"))
 
 model.compile(
     loss="binary_crossentropy",
     optimizer=keras.optimizers.SGD(
-        learning_rate=.0002,
-        momentum=.00002
+        learning_rate=.0003,
+        momentum=.00001
     ),
     metrics=["accuracy"]
 )
@@ -82,35 +84,48 @@ history = model.fit(
     y_train,
     validation_data = (X_test, y_test),
     class_weight = class_weights,
-    epochs=250,
+    epochs=300,
     verbose=0,
     batch_size=3
 )
+
+for layer in model.layers:
+    print(layer.get_weights())
 
 price_data.set_index("Date", inplace=True, drop=False)
 #price_data.drop("Date", inplace=True)
 
 plt.plot(price_data[["Close"]])
 ax = plt.gca()
-ax.xaxis.set_major_locator(mdates.MonthLocator(interval=1))
+ax.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
+plt.xticks(rotation=45)
+
+df = pd.DataFrame()
+df["Pred"] = 0.0
 
 for i, row in price_data.iterrows():
     t = np.array([row[features]]).astype(np.float32)
-    shit = model(t).numpy()[0][0]
-    if shit < .5:
-        print("SELL")
+    pred = model(t).numpy()[0][0]
+    df.loc[len(df.index)+1] = [pred]
+    if pred < .5:
+        #print("SELL")
         plt.axvline(x=row["Date"], color=(1,0,0,.3))
-    elif shit > .5:
-        print("BUY")
+    elif pred >= .5:
+        #print("BUY")
         plt.axvline(x=row["Date"], color=(0,1,0, .3))
 
-fig, (ax1, ax2) = plt.subplots(2)
+print(df)
+
+fig, (ax1, ax2, ax3) = plt.subplots(3)
 fig.suptitle("Training data", fontsize=16)
 ax1.plot(history.history["loss"])
 ax1.plot(history.history["val_loss"])
 ax2.plot(history.history["accuracy"])
 ax2.plot(history.history["val_accuracy"])
-plt.xlabel("epoch")
+df["Pred"].plot.kde(ax=ax3)
+ax1.set_xlabel("epoch")
+ax2.set_xlabel("epoch")
+ax3.set_xlabel("prediction")
 ax1.set_ylabel("loss")
 ax2.set_ylabel("accuracy")
 plt.show()
