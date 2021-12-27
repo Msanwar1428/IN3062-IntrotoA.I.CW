@@ -1,8 +1,7 @@
 """
-Some 4am NN abomination made by scouring internet blogs.
-Testing is a pain in the ass because I couldn't get tensorflow-gpu working.
-Even with a aparticularly powerful CPU it takes 5 mins to train the model.
-Maybe I should save the model and load it in future.
+Could not get tensorflow-gpu to work, training takes a significant amount of time on the CPU even with a 9700k overclocked.
+
+Despite standardizing the data, there does not seem to be any success in training models to solve the problem.
 
 http://colah.github.io/posts/2014-03-NN-Manifolds-Topology/
 It is suggested that for an n-dimensional non linearly seperable dataset, the problem must be solved using n+1
@@ -10,7 +9,8 @@ dimensions. To achieve this some relation is commented on that for N hidden laye
 The page makes me believe the best I may get from the NN is some "good enough" transform of the entire dataset to
 ~some location, reaching a local minima that classifies everything as class A or B with no nuance. 
 
-I will just copy everyone else and use ReLu for this many parameters, I think.
+After testing, adding more layers does not help to improve results. Without drop out overfitting rapidly becomes an issue, and with dropout the results are interchaneable
+between models with many and few hidden layers.
 
 @Author: Lucas Wilson
 """
@@ -51,12 +51,31 @@ X = scaler.transform(X)
 #X = normalize(X)
 np.random.shuffle(X)
 
+def plot_confusion_matrix(cm, names, title='Confusion matrix', cmap=plt.cm.Blues):
+    """
+    Plots confusion matrix
+    @Author: jacob
+    source IN3062 lecture 3 exercise solutions
+    """
+
+    plt.imshow(cm, interpolation='nearest', cmap=cmap)
+    plt.title(title)
+    plt.colorbar(fraction=0.05)
+    tick_marks = np.arange(len(names))
+    plt.xticks(tick_marks, names, rotation=45)
+    plt.yticks(tick_marks, names)
+    plt.tight_layout()
+    plt.ylabel('True label')
+    plt.xlabel('Predicted label')
+
 X_train, X_test, y_train, y_test = train_test_split(
     X,
     y,
     test_size = 0.3,
     random_state = 47
 )
+
+y_true = y
 
 class_weights = class_weight.compute_class_weight(
     class_weight='balanced',
@@ -89,9 +108,6 @@ history = model.fit(
     batch_size=3
 )
 
-for layer in model.layers:
-    print(layer.get_weights())
-
 price_data.set_index("Date", inplace=True, drop=False)
 #price_data.drop("Date", inplace=True)
 
@@ -103,18 +119,21 @@ plt.xticks(rotation=45)
 df = pd.DataFrame()
 df["Pred"] = 0.0
 
+y_pred = np.array([])
+
 for i, row in price_data.iterrows():
     t = np.array([row[features]]).astype(np.float32)
     pred = model(t).numpy()[0][0]
     df.loc[len(df.index)+1] = [pred]
+    #y_pred = np.append(y_pred, pred)
     if pred < .5:
         #print("SELL")
+        y_pred = np.append(y_pred, 0)
         plt.axvline(x=row["Date"], color=(1,0,0,.3))
     elif pred >= .5:
         #print("BUY")
         plt.axvline(x=row["Date"], color=(0,1,0, .3))
-
-print(df)
+        y_pred = np.append(y_pred, 1)
 
 fig, (ax1, ax2, ax3) = plt.subplots(3)
 fig.suptitle("Training data", fontsize=16)
@@ -128,4 +147,12 @@ ax2.set_xlabel("epoch")
 ax3.set_xlabel("prediction")
 ax1.set_ylabel("loss")
 ax2.set_ylabel("accuracy")
+
+plt.figure()
+
+print(len(X), len(y_pred))
+cm = confusion_matrix(y, y_pred)
+cm_normalized = cm.astype("float") / cm.sum(axis=1)[:, np.newaxis]
+plot_confusion_matrix(cm_normalized, ["Sell", "Buy"], title="Normalized Confusion")
+
 plt.show()
